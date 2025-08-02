@@ -221,6 +221,35 @@ This version includes **MCP Phase 5 Integration** which provides:
 
 The research output is automatically saved to `output-examples/` directory with timestamps.
 
+### Running Research Agent with Claude + MCP Integration
+
+For the ultimate research experience combining Claude's advanced reasoning with MCP tool ecosystem:
+
+```bash
+# Set your API keys
+export ANTHROPIC_API_KEY="your-anthropic-api-key"
+export TAVILY_API_KEY="your-tavily-api-key"  # Optional: for additional web search
+
+# Optional: Set GitHub token for code analysis
+export GITHUB_PERSONAL_ACCESS_TOKEN="your-github-token"
+
+# Run the research agent with Claude + MCP Phase 5 integration
+uv run python run_research_agent_mcp.py "Your research question here"
+
+# Example research queries:
+python run_research_agent_mcp.py "Analyze the enterprise integration landscape for AI platforms in 2024"
+python run_research_agent_mcp.py "What are the best practices for implementing multi-cloud service orchestration?"
+python run_research_agent_mcp.py "Compare enterprise CRM platforms and their API integration capabilities"
+```
+
+This version provides **the most powerful research capabilities** by combining:
+- **Claude's Advanced Reasoning**: Superior planning, analysis, and synthesis
+- **MCP Phase 5 Integration**: Same enterprise tools as local version
+- **Cloud Reliability**: No local model management required
+- **Fastest Performance**: Optimized for speed and responsiveness
+
+The research output is automatically saved to `output-examples/` directory with timestamps and "MCP_Phase5_Claude" prefix.
+
 The agent created with `create_deep_agent` is just a LangGraph graph - so you can interact with it (streaming, human-in-the-loop, memory, studio)
 in the same way you would any LangGraph agent.
 
