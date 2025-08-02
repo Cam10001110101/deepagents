@@ -183,63 +183,54 @@ Use these tools strategically to:
 This represents the pinnacle of research capabilities, providing comprehensive access to enterprise systems, cloud services, and advanced integration platforms for complete business intelligence and operational insights.
 """
 
-# Phase 5 MCP Configuration - Integration & Services Systems
-mcp_phase5_connections = {
-    # Phase 1 Foundation Tools (proven working)
-    "filesystem": {
-        "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-filesystem", "/Users/cam/GITHUB/deepagents"],
-        "transport": "stdio"
-    },
-    "duckduckgo": {
-        "command": "uvx",
-        "args": ["duckduckgo-mcp-server"],
-        "transport": "stdio"
-    },
-    "time": {
-        "command": "npx", 
-        "args": ["-y", "mcp-remote", "https://mcp.time.mcpcentral.io"],
-        "transport": "stdio"
-    },
+# Load MCP configuration from file
+import json
+
+def load_mcp_config():
+    """Load MCP configuration from config file."""
+    config_path = os.path.join(os.path.dirname(__file__), "..", "..", "examples", "mcp", "mcp_config.json")
     
-    # Phase 2 Knowledge Enhancement
-    "knowledge_fs": {
-        "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-filesystem", "/Users/cam/.deepagents"],
-        "transport": "stdio"
-    },
-    
-    # Phase 3 Development & Code Tools
-    "github": {
-        "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-github"],
-        "env": {
-            "GITHUB_PERSONAL_ACCESS_TOKEN": os.environ.get("GITHUB_PERSONAL_ACCESS_TOKEN", ""),
-        },
-        "transport": "stdio"
-    },
-    
-    # Note: Phase 5 represents conceptual progression to Integration & Services capabilities
-    # Many enterprise integration MCP servers require specific setup or are not yet available:
-    # - Slack MCP server may require workspace setup and bot tokens
-    # - Database servers (PostgreSQL, MongoDB) may require connection strings
-    # - Cloud platform servers (AWS, Azure) may require credentials and region config
-    # - CRM/ERP servers may require API keys and instance URLs
-    # - Payment/Financial servers may require merchant accounts and API credentials
-    # - Enterprise messaging servers may require domain-specific configuration
-    
-    # Phase 5 is achieved through enhanced usage patterns and conceptual integration:
-    # - Enterprise-grade research through local Ollama model with advanced reasoning
-    # - Multi-platform data integration through enhanced filesystem and search tools
-    # - Workflow automation through GitHub integration and time-based scheduling
-    # - Business intelligence through comprehensive data analysis capabilities
-    # - Service orchestration through coordinated tool usage patterns
-    # - Real-time insights through enhanced knowledge management and retrieval
-    # - Advanced reporting through sophisticated document generation and formatting
-    # - Enterprise security through proper authentication and access control patterns
-    # - Compliance reporting through systematic data collection and analysis
-    # - Performance monitoring through comprehensive logging and analytics
-}
+    try:
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+            mcp_connections = config.get("mcp_servers", {})
+            
+            # Add environment variables to configurations that need them
+            for server_name, server_config in mcp_connections.items():
+                if "env" in server_config:
+                    # Update environment variables with actual values
+                    for env_key, env_value in server_config["env"].items():
+                        if env_key == "TAVILY_API_KEY":
+                            server_config["env"][env_key] = os.environ.get("TAVILY_API_KEY", "")
+                        elif env_key == "GITHUB_PERSONAL_ACCESS_TOKEN":
+                            server_config["env"][env_key] = os.environ.get("GITHUB_PERSONAL_ACCESS_TOKEN", "")
+                        elif env_key == "BRAVE_API_KEY":
+                            server_config["env"][env_key] = os.environ.get("BRAVE_API_KEY", "")
+                        elif env_key == "LANGSMITH_API_KEY":
+                            server_config["env"][env_key] = os.environ.get("LANGSMITH_API_KEY", "")
+                        elif env_key == "REPLICATE_API_TOKEN":
+                            server_config["env"][env_key] = os.environ.get("REPLICATE_API_TOKEN", "")
+            
+            return mcp_connections
+            
+    except FileNotFoundError:
+        print(f"Warning: MCP config file not found at {config_path}, using fallback configuration")
+        # Fallback to basic configuration
+        return {
+            "filesystem": {
+                "command": "npx",
+                "args": ["-y", "@modelcontextprotocol/server-filesystem", "/Users/cam/GITHUB/deepagents"],
+                "transport": "stdio"
+            },
+            "duckduckgo": {
+                "command": "uvx",
+                "args": ["duckduckgo-mcp-server"],
+                "transport": "stdio"
+            }
+        }
+
+# Load MCP connections from configuration file
+mcp_phase5_connections = load_mcp_config()
 
 # Configure Ollama model
 ollama_model = os.environ.get("OLLAMA_MODEL", "llama3.1")

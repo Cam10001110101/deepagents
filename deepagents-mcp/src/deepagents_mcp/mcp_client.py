@@ -48,6 +48,29 @@ try:
 except ImportError:
     CONSENT_AVAILABLE = False
 
+# Import protocol compliance validation
+try:
+    from .protocol_compliance import (
+        validate_mcp_connection,
+        create_default_compliance_validator,
+        ComplianceLevel
+    )
+    COMPLIANCE_AVAILABLE = True
+except ImportError:
+    COMPLIANCE_AVAILABLE = False
+
+# Import tool output validation
+try:
+    from .tool_output_validation import (
+        validate_tool_output,
+        create_safe_error_response,
+        ToolOutputValidator,
+        STRICT_VALIDATOR
+    )
+    OUTPUT_VALIDATION_AVAILABLE = True
+except ImportError:
+    OUTPUT_VALIDATION_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -56,9 +79,10 @@ class MCPToolProvider:
     
     def __init__(self, connections: Optional[Dict[str, Any]] = None, 
                  security_config: Optional[ResourceServerConfig] = None,
-                 enable_security: bool = False,
+                 enable_security: bool = True,
                  enable_consent: bool = True,
-                 consent_manager: Optional[ConsentManager] = None):
+                 consent_manager: Optional[ConsentManager] = None,
+                 validate_outputs: bool = True):
         """Initialize MCP tool provider.
         
         Args:
@@ -87,6 +111,7 @@ class MCPToolProvider:
             enable_security: Whether to enable OAuth 2.1 security features
             enable_consent: Whether to require user consent for tool execution
             consent_manager: Optional consent manager instance
+            validate_outputs: Whether to validate and sanitize tool outputs (default: True)
         """
         if not MCP_AVAILABLE:
             raise ImportError(
@@ -95,6 +120,17 @@ class MCPToolProvider:
             )
         
         self.connections = connections or {}
+        
+        # Validate connection configurations for MCP compliance
+        if COMPLIANCE_AVAILABLE and self.connections:
+            for server_name, config in self.connections.items():
+                compliance_result = validate_mcp_connection(config)
+                if not compliance_result.compliant:
+                    logger.error(f"MCP connection '{server_name}' has compliance violations: {compliance_result.violations}")
+                    # Continue but log the violations
+                elif compliance_result.warnings:
+                    logger.warning(f"MCP connection '{server_name}' has compliance warnings: {compliance_result.warnings}")
+        
         self.client = MultiServerMCPClient(self.connections) if self.connections else None
         self._cached_tools: Optional[List[BaseTool]] = None
         
@@ -112,6 +148,26 @@ class MCPToolProvider:
             self.session_manager = None
             if enable_security and not SECURITY_AVAILABLE:
                 logger.warning("Security requested but security dependencies not available")
+        
+        # Consent framework configuration
+        self.enable_consent = enable_consent and CONSENT_AVAILABLE
+        if self.enable_consent:
+            self.consent_manager = consent_manager or get_consent_manager()
+            logger.info("User consent framework enabled for MCP client")
+        else:
+            self.consent_manager = None
+            if enable_consent and not CONSENT_AVAILABLE:
+                logger.warning("Consent requested but consent dependencies not available")
+        
+        # Output validation configuration
+        self.validate_outputs = validate_outputs and OUTPUT_VALIDATION_AVAILABLE
+        if self.validate_outputs:
+            self.output_validator = STRICT_VALIDATOR
+            logger.info("Tool output validation enabled for MCP client")
+        else:
+            self.output_validator = None
+            if validate_outputs and not OUTPUT_VALIDATION_AVAILABLE:
+                logger.warning("Output validation requested but validation dependencies not available")
     
     def add_server(self, name: str, connection: Dict[str, Any]) -> None:
         """Add a new MCP server connection.
@@ -251,7 +307,7 @@ class MCPToolProvider:
             # Check user consent if consent framework is enabled
             if self.enable_consent and CONSENT_AVAILABLE:
                 try:
-                    consent_manager = self.consent_manager or get_consent_manager()
+                    consent_manager = self.consent_manager
                     
                     # Create consent request
                     consent_request = await consent_manager.request_consent(
@@ -293,14 +349,44 @@ class MCPToolProvider:
                     return f"Error: Consent validation failed for tool '{tool.name}': {e}"
             
             # Execute original tool
+            raw_result = None
             if original_arun:
-                return await original_arun(*args, **kwargs)
+                raw_result = await original_arun(*args, **kwargs)
             elif original_run:
                 # Run sync function in thread pool
                 loop = asyncio.get_event_loop()
-                return await loop.run_in_executor(None, lambda: original_run(*args, **kwargs))
+                raw_result = await loop.run_in_executor(None, lambda: original_run(*args, **kwargs))
             else:
-                return f"Error: Tool '{tool.name}' has no execution method"
+                raw_result = f"Error: Tool '{tool.name}' has no execution method"
+            
+            # Validate and sanitize tool output if validation is enabled
+            if self.validate_outputs and self.output_validator:
+                try:
+                    validation_result = self.output_validator.validate_tool_result(raw_result, tool.name)
+                    
+                    if validation_result.valid:
+                        logger.debug(f"Tool output validation passed for '{tool.name}'")
+                        return validation_result.sanitized_output
+                    else:
+                        # Log validation errors
+                        error_messages = [issue.message for issue in validation_result.issues 
+                                        if issue.severity.value in ['error', 'critical']]
+                        logger.error(f"Tool output validation failed for '{tool.name}': {error_messages}")
+                        
+                        # Return safe error response instead of potentially unsafe output
+                        return create_safe_error_response(
+                            f"Tool output validation failed: {'; '.join(error_messages)}",
+                            "OUTPUT_VALIDATION_FAILED"
+                        )
+                except Exception as e:
+                    logger.error(f"Tool output validation error for '{tool.name}': {e}")
+                    return create_safe_error_response(
+                        f"Output validation error: {e}",
+                        "VALIDATION_ERROR"
+                    )
+            
+            # Return raw result if validation is disabled
+            return raw_result
         
         # Create new tool with authorization wrapper
         return create_tool(
@@ -413,14 +499,18 @@ class MCPToolProvider:
 
 async def load_mcp_tools(connections: Optional[Dict[str, Any]] = None,
                         security_config: Optional[ResourceServerConfig] = None,
-                        enable_security: bool = False,
+                        enable_security: bool = True,
+                        enable_consent: bool = True,
+                        validate_outputs: bool = True,
                         authorization_header: Optional[str] = None) -> List[BaseTool]:
-    """Convenience function to load MCP tools with optional security.
+    """Convenience function to load MCP tools with security and consent enabled by default.
     
     Args:
         connections: MCP server connections configuration
         security_config: OAuth 2.1 resource server configuration
-        enable_security: Whether to enable OAuth 2.1 security features
+        enable_security: Whether to enable OAuth 2.1 security features (default: True)
+        enable_consent: Whether to enable user consent framework (default: True)
+        validate_outputs: Whether to validate and sanitize tool outputs (default: True)
         authorization_header: Optional Bearer token for authorization
         
     Returns:
@@ -429,7 +519,13 @@ async def load_mcp_tools(connections: Optional[Dict[str, Any]] = None,
     if not connections:
         return []
     
-    provider = MCPToolProvider(connections, security_config, enable_security)
+    provider = MCPToolProvider(
+        connections=connections,
+        security_config=security_config,
+        enable_security=enable_security,
+        enable_consent=enable_consent,
+        validate_outputs=validate_outputs
+    )
     return await provider.get_tools(authorization_header=authorization_header)
 
 

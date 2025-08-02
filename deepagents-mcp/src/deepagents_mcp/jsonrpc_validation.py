@@ -58,6 +58,16 @@ class ValidationResult:
             self.warnings = []
         if self.metadata is None:
             self.metadata = {}
+    
+    @property
+    def compliant(self) -> bool:
+        """Compatibility property for tests expecting ComplianceResult interface."""
+        return self.valid
+    
+    @property
+    def violations(self) -> List[str]:
+        """Compatibility property for tests expecting ComplianceResult interface."""
+        return self.errors
 
 
 class JSONRPCValidator:
@@ -515,37 +525,20 @@ class JSONRPCValidator:
                 # Reserved for MCP use
                 result.metadata['has_mcp_meta'] = True
     
-    def validate_batch(self, messages: List[Any]) -> List[ValidationResult]:
-        """Validate a batch of JSON-RPC messages.
-        
-        Note: MCP 2025-06-18 does not support batching, so this will generate warnings.
+    def validate_batch_not_supported(self, messages: List[Any]) -> ValidationResult:
+        """Explicitly reject batch requests as per MCP 2025-06-18 specification.
         
         Args:
-            messages: List of messages to validate
+            messages: List of messages (should be rejected)
             
         Returns:
-            List of validation results
+            ValidationResult indicating batching is not supported
         """
-        results = []
-        
-        if self.mcp_mode:
-            # Create a single result indicating batching is not supported
-            result = ValidationResult(valid=False)
-            result.errors.append("JSON-RPC batching is not supported in MCP 2025-06-18")
-            return [result]
-        
-        for i, message in enumerate(messages):
-            try:
-                result = self.validate_message(message)
-                result.metadata['batch_index'] = i
-                results.append(result)
-            except Exception as e:
-                error_result = ValidationResult(valid=False)
-                error_result.errors.append(f"Batch validation error at index {i}: {e}")
-                error_result.metadata['batch_index'] = i
-                results.append(error_result)
-        
-        return results
+        result = ValidationResult(valid=False)
+        result.errors.append("JSON-RPC batching is not supported in MCP 2025-06-18 specification")
+        logger.warning("Attempted to validate batch request, but batching is not supported in MCP 2025-06-18")
+        return result
+    
 
 
 def create_default_validator() -> JSONRPCValidator:

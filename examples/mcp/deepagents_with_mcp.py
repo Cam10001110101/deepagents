@@ -8,6 +8,7 @@ This example demonstrates how to:
 """
 
 import asyncio
+import json
 import os
 from pathlib import Path
 
@@ -68,14 +69,25 @@ async def main():
     # Import after creating the server
     from deepagents import create_deep_agent_async
     
-    # Define MCP connections
-    mcp_connections = {
-        "math": {
-            "command": "python",
-            "args": [math_server_path],
-            "transport": "stdio"
+    # Load MCP configuration from file
+    config_path = Path(__file__).parent / "mcp_config.json.example"
+    if not config_path.exists():
+        print(f"❌ MCP config file not found: {config_path}")
+        print("📝 Creating a simple math server configuration...")
+        
+        # Fallback to math server if config doesn't exist
+        mcp_connections = {
+            "math": {
+                "command": "python",
+                "args": [math_server_path],
+                "transport": "stdio"
+            }
         }
-    }
+    else:
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+        mcp_connections = config.get("mcp_servers", {})
+        print(f"📡 Loaded MCP configuration with {len(mcp_connections)} servers")
     
     # Define some native tools
     def get_system_info() -> str:

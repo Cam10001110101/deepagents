@@ -600,3 +600,85 @@ def create_default_resource_server_config() -> ResourceServerConfig:
         issuer="https://auth.deepagents.local",
         required_scopes=[AuthorizationScope.TOOLS_READ.value]
     )
+
+@dataclass
+class ConsentRequest:
+    """User consent request for tool execution."""
+    request_id: str
+    tool_name: str
+    tool_description: str
+    parameters: Dict[str, Any]
+    user_id: str
+    client_id: str
+    risk_level: str = "medium"
+    timestamp: float = None
+    expires_at: float = None
+    
+    def __post_init__(self):
+        if self.timestamp is None:
+            self.timestamp = time.time()
+        if self.expires_at is None:
+            self.expires_at = self.timestamp + 300  # 5 minutes
+
+
+class ConsentManager:
+    """Manage user consent for tool execution."""
+    
+    def __init__(self):
+        self.pending_consents: Dict[str, ConsentRequest] = {}
+    
+    def request_consent(self, tool_description: str, parameters: Dict[str, Any], 
+                       user_id: str, client_id: str) -> ConsentRequest:
+        """Request user consent for tool execution.
+        
+        Args:
+            tool_description: Description of the tool to execute
+            parameters: Tool parameters
+            user_id: User identifier
+            client_id: Client identifier
+            
+        Returns:
+            Consent request object
+        """
+        request_id = secrets.token_urlsafe(16)
+        
+        consent_request = ConsentRequest(
+            request_id=request_id,
+            tool_name=tool_description.split()[0] if tool_description else "unknown",
+            tool_description=tool_description,
+            parameters=parameters,
+            user_id=user_id,
+            client_id=client_id
+        )
+        
+        self.pending_consents[request_id] = consent_request
+        return consent_request
+    
+    def grant_consent(self, request_id: str) -> bool:
+        """Grant consent for a request.
+        
+        Args:
+            request_id: Consent request identifier
+            
+        Returns:
+            True if consent was granted
+        """
+        if request_id in self.pending_consents:
+            consent = self.pending_consents[request_id]
+            if time.time() < consent.expires_at:
+                return True
+        return False
+    
+    def revoke_consent(self, request_id: str) -> bool:
+        """Revoke consent for a request.
+        
+        Args:
+            request_id: Consent request identifier
+            
+        Returns:
+            True if consent was revoked
+        """
+        if request_id in self.pending_consents:
+            del self.pending_consents[request_id]
+            return True
+        return False

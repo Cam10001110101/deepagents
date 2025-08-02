@@ -77,14 +77,32 @@ def create_deep_agent(
     if mcp_connections and MCP_AVAILABLE:
         try:
             import asyncio
-            # Create MCP provider and load tools
-            provider = MCPToolProvider(mcp_connections)
+            # Create MCP provider with security, consent, and output validation enabled by default
+            provider = MCPToolProvider(
+                connections=mcp_connections,
+                enable_security=True,
+                enable_consent=True,
+                validate_outputs=True
+            )
             # Use asyncio.run to handle async tool loading
             mcp_tools = asyncio.run(provider.get_tools())
             if mcp_tools:
-                print(f"Loaded {len(mcp_tools)} MCP tools from {len(mcp_connections)} servers")
+                print(f"Loaded {len(mcp_tools)} MCP tools from {len(mcp_connections)} servers (with security and output validation enabled)")
         except Exception as e:
             print(f"Warning: Failed to load MCP tools: {e}")
+            # Fallback to basic mode if security dependencies not available
+            try:
+                provider = MCPToolProvider(
+                    connections=mcp_connections,
+                    enable_security=False,
+                    enable_consent=False,
+                    validate_outputs=True  # Keep output validation even in fallback mode
+                )
+                mcp_tools = asyncio.run(provider.get_tools())
+                if mcp_tools:
+                    print(f"Loaded {len(mcp_tools)} MCP tools from {len(mcp_connections)} servers (fallback mode)")
+            except Exception as fallback_e:
+                print(f"Warning: Failed to load MCP tools even in fallback mode: {fallback_e}")
     elif mcp_connections and not MCP_AVAILABLE:
         print("Warning: MCP connections specified but langchain-mcp-adapters not available")
     
@@ -129,12 +147,31 @@ async def create_deep_agent_async(
     mcp_tools = []
     if mcp_connections and MCP_AVAILABLE:
         try:
-            provider = MCPToolProvider(mcp_connections)
+            # Create MCP provider with security, consent, and output validation enabled by default
+            provider = MCPToolProvider(
+                connections=mcp_connections,
+                enable_security=True,
+                enable_consent=True,
+                validate_outputs=True
+            )
             mcp_tools = await provider.get_tools()
             if mcp_tools:
-                print(f"Loaded {len(mcp_tools)} MCP tools from {len(mcp_connections)} servers")
+                print(f"Loaded {len(mcp_tools)} MCP tools from {len(mcp_connections)} servers (with security and output validation enabled)")
         except Exception as e:
             print(f"Warning: Failed to load MCP tools: {e}")
+            # Fallback to basic mode if security dependencies not available
+            try:
+                provider = MCPToolProvider(
+                    connections=mcp_connections,
+                    enable_security=False,
+                    enable_consent=False,
+                    validate_outputs=True  # Keep output validation even in fallback mode
+                )
+                mcp_tools = await provider.get_tools()
+                if mcp_tools:
+                    print(f"Loaded {len(mcp_tools)} MCP tools from {len(mcp_connections)} servers (fallback mode)")
+            except Exception as fallback_e:
+                print(f"Warning: Failed to load MCP tools even in fallback mode: {fallback_e}")
     elif mcp_connections and not MCP_AVAILABLE:
         print("Warning: MCP connections specified but langchain-mcp-adapters not available")
     

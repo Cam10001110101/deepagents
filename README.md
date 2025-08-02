@@ -62,7 +62,7 @@ cd extensions/mcp && pip install -e .
 **Quick Example:**
 ```bash
 # Run with MCP tools
-python -m deepagents --mcp-config examples/mcp/mcp_config_all.json
+python -m deepagents --mcp-config examples/mcp/mcp_config.json
 ```
 
 See `extensions/mcp/` directory for full documentation, and `examples/mcp/` for examples.

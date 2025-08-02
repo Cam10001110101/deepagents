@@ -58,9 +58,9 @@ jobs:
           # direct_prompt: |
           #   Review this PR focusing on:
           #   - For TypeScript files: Type safety and proper interface usage
-          #   - For API endpoints: Security, input validation, and error handling
+          - For API endpoints: Security, input validation, and error handling
           #   - For React components: Performance, accessibility, and best practices
-          #   - For tests: Coverage, edge cases, and test quality
+          -For tests: Coverage, edge cases, and test quality
           
           # Optional: Different prompts for different authors
           # direct_prompt: |

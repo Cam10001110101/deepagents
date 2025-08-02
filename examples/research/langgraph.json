@@ -1,7 +1,10 @@
 {
   "dependencies": ["."],
   "graphs": {
-    "research": "./research_agent.py:agent"
+    "research": "./research_agent.py:agent",
+    "research_local": "./research_agent_local.py:agent",
+    "research_local_mcp": "./research_agent_local_mcp.py:agent",
+    "research_mcp": "./research_agent_mcp.py:agent"
   },
   "env": ".env"
 }

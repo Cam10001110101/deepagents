@@ -1,27 +1,5 @@
 import os
-from typing import Literal
-
-from tavily import TavilyClient
-
 from deepagents import create_deep_agent_async, SubAgent
-
-
-# Search tool to use to do research
-def internet_search(
-    query: str,
-    max_results: int = 5,
-    topic: Literal["general", "news", "finance"] = "general",
-    include_raw_content: bool = False,
-):
-    """Run a web search"""
-    tavily_async_client = TavilyClient(api_key=os.environ["TAVILY_API_KEY"])
-    search_docs = tavily_async_client.search(
-        query,
-        max_results=max_results,
-        include_raw_content=include_raw_content,
-        topic=topic,
-    )
-    return search_docs
 
 
 sub_research_prompt = """You are a dedicated researcher. Your job is to conduct research based on the users questions.
@@ -34,7 +12,7 @@ research_sub_agent = {
     "name": "research-agent",
     "description": "Used to research more in depth questions. Only give this researcher one topic at a time. Do not pass multiple sub questions to this researcher. Instead, you should break down a large topic into the necessary components, and then call multiple research agents in parallel, one for each sub question.",
     "prompt": sub_research_prompt,
-    "tools": ["internet_search"]  # Include Tavily search alongside MCP tools
+    "tools": []  # Will use MCP Tavily tools provided by the main agent
 }
 
 sub_critique_prompt = """You are a dedicated editor. You are being tasked to critique a report.
@@ -170,13 +148,7 @@ Format the report in clear markdown with proper structure and include source ref
 </Citation Rules>
 </report_instructions>
 
-You have access to both traditional tools and comprehensive enterprise tools through Phase 5 MCP integration.
-
-## Traditional Tools
-
-### `internet_search`
-
-Use this to run an internet search for a given query. You can specify the number of results, the topic, and whether raw content should be included.
+You have access to comprehensive enterprise tools through Phase 5 MCP integration.
 
 ## MCP Phase 5 Tools - Integration & Services
 
@@ -211,6 +183,14 @@ mcp_phase5_connections = {
     "filesystem": {
         "command": "npx",
         "args": ["-y", "@modelcontextprotocol/server-filesystem", "/Users/cam/GITHUB/deepagents"],
+        "transport": "stdio"
+    },
+    "tavily": {
+        "command": "node",
+        "args": ["/Users/cam/GITHUB/deepagents/deepagents-mcp/tavily-mcp/build/index.js"],
+        "env": {
+            "TAVILY_API_KEY": os.environ.get("TAVILY_API_KEY", ""),
+        },
         "transport": "stdio"
     },
     "duckduckgo": {
@@ -267,7 +247,7 @@ mcp_phase5_connections = {
 async def create_agent():
     """Create the research agent with MCP integration."""
     return await create_deep_agent_async(
-        [internet_search],
+        [],  # No Python tools - using only MCP tools including Tavily
         research_instructions,
         subagents=[critique_sub_agent, research_sub_agent],
         mcp_connections=mcp_phase5_connections,

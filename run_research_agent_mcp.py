@@ -21,12 +21,14 @@ async def main():
         print("  export ANTHROPIC_API_KEY='your-api-key-here'")
         sys.exit(1)
     
+    # TAVILY_API_KEY is optional - if not set, Tavily MCP tools won't be available
+    # but other MCP tools (filesystem, GitHub, etc.) will still work
     if not os.environ.get("TAVILY_API_KEY"):
-        print("Error: TAVILY_API_KEY environment variable is not set.")
-        print("\nPlease set your Tavily API key:")
-        print("  export TAVILY_API_KEY='your-api-key-here'")
-        print("\nGet your free API key at: https://tavily.com")
-        sys.exit(1)
+        print("⚠️  TAVILY_API_KEY not set - Tavily search tools will not be available")
+        print("   Set your Tavily API key for enhanced search capabilities:")
+        print("   export TAVILY_API_KEY='your-api-key-here'")
+        print("   Get your free API key at: https://tavily.com")
+        print()
     
     print("🧠 Using Claude (Anthropic API)")
     print("🔧 MCP Phase 5: Integration & Services")

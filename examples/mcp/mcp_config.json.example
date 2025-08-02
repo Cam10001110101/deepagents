@@ -9,10 +9,19 @@
       ],
       "transport": "stdio"
     },
-    "duckduckgosearch": {
+    "duckduckgo": {
       "command": "uvx",
       "args": [
         "duckduckgo-mcp-server"
+      ],
+      "transport": "stdio"
+    },
+    "time": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://mcp.time.mcpcentral.io"
       ],
       "transport": "stdio"
     },

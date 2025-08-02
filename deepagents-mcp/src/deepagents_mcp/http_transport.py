@@ -36,6 +36,11 @@ from .initialization import (
     ServerCapabilities,
     create_default_initialization_manager
 )
+from .protocol_compliance import (
+    MCPProtocolValidator,
+    ComplianceLevel,
+    create_default_compliance_validator
+)
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +76,9 @@ class MCPHTTPTransport:
             "deepagents-mcp",
             "1.0.0"
         )
+        
+        # Initialize protocol compliance validator
+        self.protocol_validator = create_default_compliance_validator()
         
         # Session tracking for MCP initialization
         self.active_sessions: Dict[str, str] = {}  # connection_id -> session_id
@@ -154,14 +162,21 @@ class MCPHTTPTransport:
             # Generate or extract session ID for MCP initialization tracking
             session_id = request.headers.get('X-MCP-Session-ID') or str(uuid.uuid4())
             
-            # Validate MCP-Protocol-Version header if present
-            protocol_version = request.headers.get('MCP-Protocol-Version')
-            if protocol_version and not self._validate_protocol_version(protocol_version):
+            # Validate protocol compliance using the compliance validator
+            header_compliance = self.protocol_validator.validate_http_headers(dict(request.headers))
+            if not header_compliance.compliant:
+                logger.error(f"HTTP header compliance violations: {header_compliance.violations}")
                 return web.Response(
                     status=400,
-                    text=f"Unsupported protocol version: {protocol_version}",
-                    headers={"Content-Type": "text/plain"}
+                    text=f"Protocol compliance violations: {'; '.join(header_compliance.violations)}",
+                    headers=self.protocol_validator.create_compliant_headers({
+                        "Content-Type": "text/plain"
+                    })
                 )
+            
+            # Log any compliance warnings
+            if header_compliance.warnings:
+                logger.warning(f"HTTP header compliance warnings: {header_compliance.warnings}")
             
             # Parse JSON-RPC message
             try:
@@ -174,13 +189,19 @@ class MCPHTTPTransport:
                     headers={"Content-Type": "application/json"}
                 )
             
-            # Validate JSON-RPC format
-            if not self._validate_jsonrpc_message(message_data):
+            # Validate JSON-RPC message compliance
+            message_compliance = self.protocol_validator.validate_json_rpc_message(message_data)
+            if not message_compliance.compliant:
+                logger.error(f"JSON-RPC message compliance violations: {message_compliance.violations}")
                 return web.Response(
                     status=400,
-                    text="Invalid JSON-RPC 2.0 format",
-                    headers={"Content-Type": "application/json"}
+                    text=f"JSON-RPC compliance violations: {'; '.join(message_compliance.violations)}",
+                    headers=self.protocol_validator.create_compliant_headers()
                 )
+            
+            # Log any message compliance warnings
+            if message_compliance.warnings:
+                logger.warning(f"JSON-RPC message compliance warnings: {message_compliance.warnings}")
             
             # Handle MCP initialization lifecycle messages
             method = message_data.get("method")
@@ -213,9 +234,10 @@ class MCPHTTPTransport:
             
             # Return response (if any)
             if response_data is not None:
-                response_headers = {"Content-Type": "application/json"}
+                # Create compliant response headers
+                response_headers = self.protocol_validator.create_compliant_headers()
                 
-                # Add MCP-Protocol-Version header if session is initialized
+                # Override protocol version if session is initialized with a specific version
                 if self.initialization_manager.is_session_initialized(session_id):
                     negotiated_version = self.initialization_manager.get_negotiated_version(session_id)
                     if negotiated_version:
@@ -226,10 +248,10 @@ class MCPHTTPTransport:
                     headers=response_headers
                 )
             else:
-                # No response for notifications
-                response_headers = {}
+                # No response for notifications - still send compliant headers
+                response_headers = self.protocol_validator.create_compliant_headers()
                 
-                # Add MCP-Protocol-Version header even for notifications if session is initialized
+                # Override protocol version if session is initialized with a specific version
                 if self.initialization_manager.is_session_initialized(session_id):
                     negotiated_version = self.initialization_manager.get_negotiated_version(session_id)
                     if negotiated_version:
@@ -254,7 +276,7 @@ class MCPHTTPTransport:
             return web.Response(
                 text=json.dumps(error_response),
                 status=500,
-                headers={"Content-Type": "application/json"}
+                headers=self.protocol_validator.create_compliant_headers()
             )
     
     async def _handle_get_request(self, request: Request) -> StreamResponse:
@@ -341,6 +363,14 @@ class MCPHTTPTransport:
             headers={"Content-Type": "application/json"}
         )
     
+    def _get_supported_versions(self) -> list:
+        """Get list of supported MCP protocol versions.
+        
+        Returns:
+            List of supported version strings
+        """
+        return ["2025-06-18", "2025-03-26"]  # Latest spec version first
+    
     def _validate_protocol_version(self, version: str) -> bool:
         """Validate MCP protocol version.
         
@@ -350,8 +380,7 @@ class MCPHTTPTransport:
         Returns:
             True if version is supported
         """
-        supported_versions = ["2025-06-18", "2025-03-26"]  # Add supported versions
-        return version in supported_versions
+        return version in self._get_supported_versions()
     
     def _validate_jsonrpc_message(self, message: Dict[str, Any]) -> bool:
         """Validate JSON-RPC 2.0 message format.

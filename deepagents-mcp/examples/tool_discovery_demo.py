@@ -9,6 +9,7 @@ This demonstrates the successful MCP integration by showing:
 
 import asyncio
 import json
+from pathlib import Path
 from deepagents_mcp import MCPToolProvider
 
 async def main():
@@ -16,27 +17,20 @@ async def main():
     print("🔍 DeepAgents MCP Tool Discovery Demo")
     print("=" * 50)
     
-    # Define MCP connections
-    mcp_connections = {
-        "filesystem": {
-            "command": "npx",
-            "args": [
-                "-y",
-                "@modelcontextprotocol/server-filesystem",
-                "/Users/cam/GITHUB/deepagents"
-            ],
-            "transport": "stdio"
-        },
-        "duckduckgo": {
-            "command": "uvx",
-            "args": ["duckduckgo-mcp-server"],
-            "transport": "stdio"
-        }
-    }
+    # Load MCP configuration from file
+    config_path = Path(__file__).parent / "mcp_config.json.example"
+    if not config_path.exists():
+        print(f"❌ MCP config file not found: {config_path}")
+        return
+    
+    with open(config_path, 'r') as f:
+        config = json.load(f)
+    
+    mcp_connections = config.get("mcp_servers", {})
     
     print(f"📡 Connecting to {len(mcp_connections)} MCP servers...")
-    print("- Filesystem MCP Server")
-    print("- DuckDuckGo Search MCP Server")
+    for server_name in mcp_connections.keys():
+        print(f"- {server_name.title()} MCP Server")
     print()
     
     try:
